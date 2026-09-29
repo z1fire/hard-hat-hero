@@ -420,6 +420,7 @@ const GLOSSARY = {
   punch_list: ['Punch List', 'A list of small things to fix at the end, like a scuff or a sticky door.'],
   co: ['Certificate of Occupancy', 'The paper from the town that says the house is safe to live in. No CO, no move-in!'],
   closing: ['Closing', 'The meeting where papers are signed and the keys are handed to the new owners.'],
+  loan: ['Construction Loan', 'Most families borrow money from a bank to build a house and pay it back over many years. Borrowing MORE means paying back more, so going over budget is a big deal!'],
   change_order: ['Change Order', 'A written change to the plan after building starts. It usually costs extra money and time.'],
   safety: ['Job Site Safety', 'Hard hats, safety glasses, gloves and boots keep workers safe. Safety always comes first!'],
   weather_delay: ['Weather Delay', 'Days when rain, snow or cold stop outdoor work. Builders plan extra time for them.'],

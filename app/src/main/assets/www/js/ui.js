@@ -112,7 +112,8 @@ const Views = {
     return `<h2>Lot ${g.lotSel + 1} Test Results</h2>` +
       boss(`Smart builders test land BEFORE buying it. A ${word('survey')} finds the property lines, and a ${word('soil_test')} checks the ground.`) +
       `<div class="card"><ul class="finds">${f.map(x => `<li class="${x.ok ? 'pro' : 'con'}">${x.t}</li>`).join('')}</ul>
-      <div class="kv"><span>Land price</span><b>${money(L.price)}</b><span>Closing costs (2%)</span><b>${money(closing)}</b><span>Money left after</span><b>${money(left() - L.price - closing)}</b></div></div>` +
+      <div class="kv"><span>Land price</span><b>${money(L.price)}</b><span>Closing costs (2%)</span><b>${money(closing)}</b><span>Money left after</span><b>${money(left() - L.price - closing)}</b></div>` +
+      (left() - L.price - closing < (g.targetBuild || 0) * 1.1 ? `<p class="verdict neg">⚠️ Careful! After buying this land, there may NOT be enough money left to build the house the family needs (about ${money(Math.round((g.targetBuild || 0) * 1.1 / 1000) * 1000)}).</p>` : `<p class="verdict pos">👍 There should be enough money left to build their house.</p>`) + `</div>` +
       `<div class="row">${btn(`✅ Buy this land`, 'buyLot', undefined, 'big go')}${btn('↩ Other lots', 'backToLots', undefined, 'big')}</div>`;
   },
   design() {
@@ -130,6 +131,8 @@ const Views = {
         <span>💲 Cost to build</span><b>${money(est)} ${fits ? '✅' : '❌'}</b></div>
         <div class="row">${btn('👀 See it', 'previewPlan', i, 'sm')}${btn('Choose this plan', 'choosePlan', i, 'sm go')}</div></div>`;
     });
+    if (!g.plans.some((p, i) => g.planEst[i] * 1.1 <= left())) h += `<div class="card warn"><p>😬 <b>Uh-oh — none of these houses fit the money we have left!</b> The land cost a lot. You can sell it and pick cheaper land, or pick a house and ask the bank for a bigger loan.</p></div>`;
+    h += btn(`🏷️ Sell this land & pick different land (get back ${money(Math.round(g.lot.price * 0.97 / 10) * 10)})`, 'sellLand', undefined, 'big');
     return h;
   },
   colors() {
@@ -157,7 +160,11 @@ const Views = {
         <span>Total needed</span><b class="${ok ? 'pos' : 'neg'}">${money(need)}</b></div>
         <p class="verdict ${ok ? 'pos' : 'neg'}">${ok ? '✅ It fits the budget!' : `❌ That is ${money(need - have)} too much! Maybe pick a smaller plan.`}</p>
         <p>⏱️ It should take about <b>${g.est.days}</b> work days to build (plus weekends & weather).</p></div>` +
-      `<div class="row">${btn('📋 Get the permit ➜', 'goPermit', undefined, 'big ' + (ok ? 'go' : ''))}${btn('↩ Change the plan', 'backToDesign', undefined, 'big')}</div>`;
+      (ok ? btn('📋 Get the permit ➜', 'goPermit', undefined, 'big go')
+        : `<p>What should we do? You're the boss!</p>` + btn('↩ Pick a smaller or cheaper plan', 'backToDesign', undefined, 'big go') +
+          btn(`🏦 Ask the bank for a bigger ${GLOSSARY.loan[0].toLowerCase()} (family gets a little worried)`, 'bankLoan', undefined, 'big') +
+          btn('📋 Keep this plan and go over budget', 'goPermit', undefined, 'big')) +
+      (ok ? btn('↩ Change the plan', 'backToDesign', undefined, 'big') : '');
   },
   permit() {
     return `<h2>📋 Building Permit</h2>` +
@@ -289,15 +296,19 @@ function feedbackWrong(id) {
 }
 
 // ---------- main render ----------
+const BACK_STEPS = ['family', 'land', 'landCheck', 'design', 'colors', 'estimate', 'permit'];
+const SNAP_ACTIONS = ['goLand', 'checkLot', 'backToLots', 'buyLot', 'choosePlan', 'colorsDone', 'backToDesign', 'sellLand', 'bankLoan', 'goPermit', 'submitPermit'];
 let lastStep = null;
 function render() {
   if (!g) return;
   renderTop();
   const v = Views[g.step];
-  $('#panel').innerHTML = v ? v() : '';
+  $('#panel').innerHTML = (v ? v() : '') +
+    (BACK_STEPS.includes(g.step) && canUndo() ? `<button class="btn big back" data-a="undo">↩ Go back</button>` : '');
   if (lastStep !== g.step) { $('#panel').scrollTop = 0; lastStep = g.step; if (prefs.read) readPanel(); }
   $('#panel').querySelectorAll('canvas.fp').forEach(c => Scene.drawFloorPlan(c, g.plans[+c.dataset.plan]));
   if (g.event) showEvent();
+  else if (checkOverBudget()) showOverBudget();
   if (g.newTerms && g.newTerms.length) { toast(`📖 New builder word${g.newTerms.length > 1 ? 's' : ''}: ${g.newTerms.map(id => GLOSSARY[id][0]).join(', ')}`); g.newTerms = []; }
   save();
 }
@@ -321,8 +332,10 @@ const Auto = {
 // ---------- actions ----------
 function act(a, v) {
   if (a !== 'auto' && Auto.on && a !== 'term') Auto.stop();
+  if (SNAP_ACTIONS.includes(a)) snapshot();
   switch (a) {
     case 'auto': Auto.toggle(); return;
+    case 'undo': undo(); sfx('tap'); break;
     case 'term': showTerm(v); return;
     case 'book': showBook(); return;
     case 'newHouse': newGame(); Scene.resize(); sfx('good'); break;
@@ -361,6 +374,11 @@ function showEvent() {
   else modal(`<div class="evicon">${e.icon}</div><h2>${e.title}</h2><p class="big">${e.text}</p><p class="dim">You're the boss. What do you do?</p>${e.choices.map((c, i) => `<button class="btn choice" data-m="ev" data-v="${i}">${c}</button>`).join('')}<button class="spk" data-say2="1">🔊</button>`, 'event noclose');
   if (prefs.read) speak(e.result || e.text);
 }
+function showOverBudget() {
+  Auto.on = false; clearTimeout(Auto.timer);
+  modal(`<div class="evicon">💸</div><h2>We're over budget!</h2><p class="big">We spent more money than the family planned. Their bank will lend them extra so we can <b>keep building</b> — but they have to pay it back, so they're not happy about it.</p>
+    <p>💡 Builder tip: pick good crews, avoid surprises, and save a ${word('contingency')} next time!</p><button class="btn big go" data-m="close">Keep building 💪</button>`);
+}
 function showTerm(id) {
   const e = GLOSSARY[id]; if (!e) return;
   modal(`<h2>📖 ${e[0]}</h2><p class="big">${e[1]}</p><button class="spk" data-say2="1">🔊</button>`);
@@ -375,7 +393,7 @@ function showMoney() {
   if (!g) return;
   const cats = { Land: 0, Materials: 0, Labor: 0, 'Permits & fees': 0, 'Fixes & surprises': 0 };
   g.ledger.forEach(([d, w, a]) => {
-    if (/^Land|Closing|Survey/.test(w)) cats.Land += a; else if (/^Materials/.test(w)) cats.Materials += a; else if (/^Labor/.test(w)) cats.Labor += a;
+    if (/^Land|Closing|Survey|Sold the land/.test(w)) cats.Land += a; else if (/^Materials/.test(w)) cats.Materials += a; else if (/^Labor/.test(w)) cats.Labor += a;
     else if (/permit|Plan revision/i.test(w)) cats['Permits & fees'] += a; else cats['Fixes & surprises'] += a;
   });
   modal(`<h2>💰 Money Report</h2><div class="kv big"><span>Family budget</span><b>${money(g.budget)}</b><span>Spent</span><b>${money(g.spent)}</b><span>Left</span><b class="${left() < 0 ? 'neg' : 'pos'}">${money(left())}</b></div>
@@ -389,6 +407,7 @@ function showMenu() {
     <button class="btn big" data-m="help">❓ How to play</button>
     <button class="btn big" data-m="read">🔊 Read aloud: <b>${prefs.read ? 'ON' : 'OFF'}</b></button>
     <button class="btn big" data-m="sound">🔈 Sounds: <b>${prefs.sound ? 'ON' : 'OFF'}</b></button>
+    <button class="btn big" data-m="restart">🔄 Start a new house</button>
     <button class="btn big" data-m="title">🏠 Title screen</button>
     <p class="dim center">House #${g ? g.seed : ''}</p>`);
 }
@@ -444,6 +463,8 @@ window.addEventListener('DOMContentLoaded', () => {
     if (k === 'help') showHelp();
     if (k === 'read') { prefs.read = !prefs.read; savePrefs(); showMenu(); if (!prefs.read) stopSpeak(); }
     if (k === 'sound') { prefs.sound = !prefs.sound; savePrefs(); showMenu(); }
+    if (k === 'restart') { modal(`<h2>🔄 Start a new house?</h2><p class="big">This house will be left unfinished and you'll meet a brand-new family.</p><button class="btn big go" data-m="restartYes">Yes, start a new house</button><button class="btn big" data-m="close">No, keep building</button>`); return; }
+    if (k === 'restartYes') { closeModal(); Auto.on = false; newGame(); Scene.resize(); render(); sfx('good'); return; }
     if (k === 'title') { closeModal(); Auto.on = false; showTitle(); }
   });
   $('#title').addEventListener('click', e => {

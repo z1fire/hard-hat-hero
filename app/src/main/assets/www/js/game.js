@@ -98,6 +98,7 @@ function makeGame(seed) {
   const est = estimateBuild(o, target);
   o.budget = Math.round((prices[1] + est.total + 6000) * r.f(1.08, 1.13) / 5000) * 5000;
   o.deadlineDay = Math.round(est.days * 1.4 * 1.15 + 50);
+  o.targetBuild = est.total;
   o.lot = null;
   Object.assign(o, {
     spent: 0, ledger: [], happy: 60, safety: 85, brain: { right: 0, total: 0 }, qSum: 0, qN: 0, goodNeighbor: 0,
@@ -123,6 +124,29 @@ function load() {
 }
 function hasSave() { try { const s = localStorage.getItem(SAVE_KEY); return !!s && JSON.parse(s).step !== 'done'; } catch (e) { return false; } }
 function stats() { try { return JSON.parse(localStorage.getItem(STATS_KEY)) || { houses: 0, best: 0, stars: 0 }; } catch (e) { return { houses: 0, best: 0, stars: 0 }; } }
+
+// ---------- going back during planning (snapshots of the game) ----------
+function snapshot() {
+  const o = Object.assign({}, g, { rng: g.rng.s, hist: null });
+  g.hist = (g.hist || []).slice(-11);
+  g.hist.push(JSON.stringify(o));
+}
+function canUndo() { return !!(g && g.hist && g.hist.length); }
+function undo() {
+  if (!canUndo()) return;
+  const h = g.hist, o = JSON.parse(h.pop());
+  const r = new RNG(0); r.s = o.rng; o.rng = r; o.hist = h;
+  g = o;
+  if (g.plan) g.q = computeQty(g);
+}
+// When money runs out mid-build, the family's bank covers it (the game never gets stuck)
+function checkOverBudget() {
+  if (!g.tasks || left() >= 0 || g.overWarned) return false;
+  g.overWarned = true;
+  g.happy -= 6;
+  learn('loan');
+  return true;
+}
 
 // ---------- pre-construction ----------
 const Game = {
@@ -159,6 +183,7 @@ const Game = {
     g.happy += wish * 5 - (L.flood ? 4 : 0);
     g.wishHits = wish;
     g.plans = genPlans(g.rng, g);
+    g.planEst = null;
     g.previewPlan = 0;
     g.colors = defaultColors(g);
     g.step = 'design'; g.phase = 'design';
@@ -192,6 +217,24 @@ const Game = {
     learn('contingency');
   },
   backToDesign() { g.plan = null; g.step = 'design'; },
+  // Sell the lot back (a real sale loses the closing costs) and pick different land
+  sellLand() {
+    const L = g.lot, back = Math.round(L.price * 0.97 / 10) * 10;
+    g.spent -= back; g.ledger.push([g.day, `Sold the land: ${lotAddress(L, g)}`, -back]);
+    g.happy -= (g.wishHits || 0) * 5 - (L.flood ? 4 : 0);
+    g.lot = null; g.plan = null; g.plans = null; g.planEst = null;
+    g.step = 'land'; g.phase = 'land';
+    g.toast = `🏷️ Land sold for ${money(back)}. Selling costs a little money, so choose carefully!`;
+  },
+  // Borrow more from the bank so the house fits the budget
+  bankLoan() {
+    const need = Math.round(g.est.total * 1.1) - left();
+    const extra = Math.ceil(need / 5000) * 5000;
+    g.budget += extra; g.loanExtra = (g.loanExtra || 0) + extra;
+    g.happy -= clamp(Math.round(extra / 6000), 4, 20);
+    learn('loan');
+    g.toast = `🏦 The bank lent the family ${money(extra)} more. They will have to pay it back, so they're ${extra > 50000 ? 'VERY' : 'a little'} worried.`;
+  },
   goPermit() {
     g.happy += (g.planFit || 0) + (g.colorBonus || 0);
     g.step = 'permit'; g.phase = 'permit';
@@ -222,6 +265,7 @@ const Game = {
     g.tasks = activeTasks(g).map(t => t.id);
     g.ti = 0;
     g.buildStartDay = g.day;
+    g.hist = null; // no more going back once building starts
     learn('safety');
     beginTask();
   },

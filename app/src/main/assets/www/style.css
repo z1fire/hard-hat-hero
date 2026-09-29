@@ -158,3 +158,4 @@ details.why summary { font-weight: 800; cursor: pointer; }
 h1 { margin: 0; font-size: 38px; color: #c77d00; text-shadow: 2px 2px 0 #ffe08a; letter-spacing: 1px; }
 .sub { margin: 4px 0 8px; font-size: 16px; }
 @media (orientation: landscape) and (max-height: 500px) { .logo { display: none; } h1 { font-size: 28px; } .tbox { padding: 8px 14px; } #title { align-items: center; justify-content: flex-end; } .tbox .btn.big { padding: 10px; margin: 5px 0; } }
+.btn.big.back { background: #f3ecdc; margin-top: 16px; }
