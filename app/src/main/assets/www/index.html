@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f4b400">
+<title>Hard Hat Hero</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="stat" id="stMoney" title="Tap for money report"></div>
+    <div class="stat" id="stDay"></div>
+    <div class="stat" id="stQual"></div>
+    <div class="stat" id="stHappy"></div>
+    <div class="tbtns"><button id="btnBook" aria-label="Handbook">📖</button><button id="btnMenu" aria-label="Menu">☰</button></div>
+  </header>
+  <nav id="phases"></nav>
+  <main id="main">
+    <section id="stage">
+      <canvas id="scene"></canvas>
+      <div id="sceneUI"><button id="btnView">🔍 See inside</button><div id="wx"></div></div>
+    </section>
+    <section id="panel"></section>
+  </main>
+</div>
+
+<div id="title" class="hidden">
+  <div class="tbox">
+    <div class="logo">👷🏗️🏡</div>
+    <h1>Hard Hat Hero</h1>
+    <p class="sub">Be the General Contractor! Build a real house — from buying land to the family moving in.</p>
+    <div id="titleBtns"></div>
+  </div>
+</div>
+
+<div id="modal" class="hidden"><div id="modalCard" class="mcard"></div></div>
+<div id="toast"></div>
+
+<script src="js/rng.js"></script>
+<script src="js/data.js"></script>
+<script src="js/gen.js"></script>
+<script src="js/render.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
